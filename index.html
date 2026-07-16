@@ -6,18 +6,10 @@
     <title>炭炭打王小工具</title>
     <style>
         :root { --bg: #0f0f0f; --card: #1e1e1e; --accent: #f39c12; }
-        body { background: var(--bg); color: #eee; font-family: 'Helvetica Neue', sans-serif; margin: 0; padding: 10px; }
+        body { background: var(--bg); color: #eee; font-family: sans-serif; margin: 0; padding: 10px; }
         .boss-card { background: var(--card); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .card-title { color: var(--accent); font-size: 1.2rem; font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--accent); padding-left: 10px; }
-        
-        /* 修改此處，強制每行排列 3 個 */
-        .grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 10px; 
-            margin-bottom: 10px; 
-        }
-
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
         .skill-btn { background: #2a2a2a; border-radius: 10px; padding: 10px; text-align: center; cursor: pointer; border: 1px solid #333; transition: 0.2s; }
         .skill-btn.active { border-color: #27ae60; background: #1a3324; }
         .skill-name { font-size: 0.8rem; }
@@ -26,7 +18,89 @@
     </style>
 </head>
 <body>
-    <!-- 剩下的 HTML 結構與 JS 邏輯不變，直接貼上即可 -->
-    <!-- ... (其餘內容保持原樣) ... -->
+
+<h2 style="text-align: center; color: var(--accent);">炭炭打王小工具</h2>
+
+<div class="boss-card">
+    <div class="card-title">女皇 P1 (50%以上)</div>
+    <div class="grid">
+        <div class="skill-btn" id="p1-s1" onclick="startTimer('p1-s1', 80, 'p1')"><div class="skill-name">反盾</div><div class="skill-time" id="p1-s1-text">80s</div></div>
+        <div class="skill-btn" id="p1-s2" onclick="startTimer('p1-s2', 60, 'p1')"><div class="skill-name">變豬</div><div class="skill-time" id="p1-s2-text">60s</div></div>
+    </div>
+    <div class="status-bar" id="p1-status" style="background:#444;">未監控</div>
+</div>
+
+<div class="boss-card">
+    <div class="card-title">女皇 P2 (50%以下)</div>
+    <div class="grid">
+        <div class="skill-btn" id="p2-s1" onclick="startTimer('p2-s1', 80, 'p2')"><div class="skill-name">反盾</div><div class="skill-time" id="p2-s1-text">80s</div></div>
+        <div class="skill-btn" id="p2-s2" onclick="startTimer('p2-s2', 60, 'p2')"><div class="skill-name">變豬</div><div class="skill-time" id="p2-s2-text">60s</div></div>
+        <div class="skill-btn" id="p2-s3" onclick="startTimer('p2-s3', 90, 'p2')"><div class="skill-name">鎖潛</div><div class="skill-time" id="p2-s3-text">90s</div></div>
+        <div class="skill-btn" id="p2-s4" onclick="startTimer('p2-s4', 60, 'p2')"><div class="skill-name">活屍</div><div class="skill-time" id="p2-s4-text">60s</div></div>
+        <div class="skill-btn" id="p2-s5" onclick="startTimer('p2-s5', 90, 'p2')"><div class="skill-name">傳送</div><div class="skill-time" id="p2-s5-text">90s</div></div>
+    </div>
+    <div class="status-bar" id="p2-status" style="background:#444;">未監控</div>
+</div>
+
+<div class="boss-card">
+    <div class="card-title">米哈</div>
+    <div class="grid"><div class="skill-btn" id="miha-s1" onclick="startTimer('miha-s1', 70, 'miha')"><div class="skill-name">反盾</div><div class="skill-time" id="miha-s1-text">70s</div></div></div>
+    <div class="status-bar" id="miha-status" style="background:#444;">等待啟動</div>
+</div>
+
+<div class="boss-card">
+    <div class="card-title">皮卡丘</div>
+    <div class="grid"><div class="skill-btn" id="pik-s1" onclick="startManualPik()"><div class="skill-name">反盾</div><div class="skill-time" id="pik-s1-text">25s</div></div></div>
+    <div class="status-bar" id="pik-status" style="background:#444;">點擊啟動</div>
+</div>
+
+<script>
+    function playAlert() { const utterance = new SpeechSynthesisUtterance("請注意"); utterance.lang = 'zh-TW'; window.speechSynthesis.speak(utterance); }
+    const alertTriggered = {}, timers = {};
+    const skillData = {
+        'p1-s1': { total: 80, current: 0, active: false, phase: 'p1' }, 'p1-s2': { total: 60, current: 0, active: false, phase: 'p1' },
+        'p2-s1': { total: 80, current: 0, active: false, phase: 'p2' }, 'p2-s2': { total: 60, current: 0, active: false, phase: 'p2' },
+        'p2-s3': { total: 90, current: 0, active: false, phase: 'p2' }, 'p2-s4': { total: 60, current: 0, active: false, phase: 'p2' },
+        'p2-s5': { total: 90, current: 0, active: false, phase: 'p2', optional: true }, 'miha-s1': { total: 70, current: 0, active: false, phase: 'miha' }
+    };
+    function startTimer(id, duration, phase) {
+        if (timers[id]) clearInterval(timers[id]);
+        alertTriggered[id] = false; const data = skillData[id];
+        data.active = true; data.current = duration; document.getElementById(id).classList.add('active');
+        timers[id] = setInterval(() => {
+            data.current -= 0.1;
+            if (data.current <= 5 && data.current > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
+            if (data.current <= 0) { data.current = 0; data.active = false; document.getElementById(id).classList.remove('active'); clearInterval(timers[id]); }
+            document.getElementById(id + '-text').innerText = data.current.toFixed(1) + 's';
+            updateGlobalSafety(phase);
+        }, 100);
+    }
+    function updateGlobalSafety(phase) {
+        let allActive = true, minTime = Infinity, targetTotal = 1;
+        for (let id in skillData) {
+            if (skillData[id].phase === phase) {
+                if (skillData[id].optional && !skillData[id].active) continue;
+                if (!skillData[id].active) allActive = false;
+                if (skillData[id].active && skillData[id].current < minTime) { minTime = skillData[id].current; targetTotal = skillData[id].total; }
+            }
+        }
+        const bar = document.getElementById(phase + '-status');
+        if (!allActive) { bar.style.background = '#444'; bar.innerText = '未監控'; }
+        else { bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; }
+    }
+    let pikStage = 0, pikTimer = null;
+    function startManualPik() {
+        if (pikTimer) clearInterval(pikTimer);
+        pikStage = 1; let time = 25;
+        pikTimer = setInterval(() => {
+            time -= 0.1;
+            if (time <= 0) { if (pikStage === 1) { pikStage = 2; time = 10; } else if (pikStage === 2) { pikStage = 3; time = 50; } else { clearInterval(pikTimer); pikStage = 0; return; } }
+            document.getElementById('pik-s1-text').innerText = time.toFixed(1) + 's';
+            const bar = document.getElementById('pik-status');
+            bar.style.background = (time <= 5) ? '#f1c40f' : (pikStage === 1 ? '#e74c3c' : (pikStage === 2 ? '#27ae60' : '#3498db'));
+            bar.innerText = (pikStage === 1) ? `反盾：${time.toFixed(1)}s` : (pikStage === 2 ? `魔消提醒：${time.toFixed(1)}s` : `安全期：${time.toFixed(1)}s`);
+        }, 100);
+    }
+</script>
 </body>
 </html>
