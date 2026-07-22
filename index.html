@@ -71,7 +71,7 @@
         window.speechSynthesis.speak(utterance); 
     }
 
-    const alertTriggered = {}, timers = {};
+    const alertTriggered = {}, animationFrames = {};
     const skillData = {
         'p1-s1': { duration: 80, active: false, phase: 'p1' }, 'p1-s2': { duration: 60, active: false, phase: 'p1' },
         'p2-s1': { duration: 80, active: false, phase: 'p2' }, 'p2-s2': { duration: 60, active: false, phase: 'p2' },
@@ -80,7 +80,7 @@
     };
 
     function startTimer(id, duration, phase) {
-        if (timers[id]) clearInterval(timers[id]);
+        if (animationFrames[id]) cancelAnimationFrame(animationFrames[id]);
         alertTriggered[id] = false; 
         const data = skillData[id];
         data.active = true; 
@@ -88,7 +88,7 @@
 
         const targetTime = Date.now() + (duration * 1000);
 
-        timers[id] = setInterval(() => {
+        function update() {
             const remainingMs = targetTime - Date.now();
             const currentSec = remainingMs / 1000;
 
@@ -100,15 +100,20 @@
             if (currentSec <= 0) {
                 data.active = false; 
                 document.getElementById(id).classList.remove('active'); 
-                clearInterval(timers[id]);
                 document.getElementById(id + '-text').innerText = '0.0s';
                 updateGlobalSafety(phase);
+                cancelAnimationFrame(animationFrames[id]);
                 return;
             }
 
             document.getElementById(id + '-text').innerText = currentSec.toFixed(1) + 's';
             updateGlobalSafety(phase);
-        }, 100); // 100ms 更新一次畫面，維持滑順度，但時間基準是 Date.now() 絕對不會變慢
+            
+            // 持續用最高效率更新畫面
+            animationFrames[id] = requestAnimationFrame(update);
+        }
+
+        animationFrames[id] = requestAnimationFrame(update);
     }
 
     function updateGlobalSafety(phase) {
@@ -118,7 +123,6 @@
                 if (skillData[id].optional && !skillData[id].active) continue;
                 if (!skillData[id].active) allActive = false;
                 
-                // 動態取得當前畫面上各個計時器的實際剩餘秒數
                 const textElem = document.getElementById(id + '-text');
                 if (skillData[id].active && textElem) {
                     const sec = parseFloat(textElem.innerText);
@@ -136,11 +140,10 @@
         }
     }
 
-    let pikTimer = null;
+    let pikAnimationFrame = null;
     function startManualPik() {
-        if (pikTimer) clearInterval(pikTimer);
+        if (pikAnimationFrame) cancelAnimationFrame(pikAnimationFrame);
 
-        // 皮卡丘階段：反盾 25s -> 魔消提醒 10s -> 安全期 50s
         const stages = [
             { duration: 25, stage: 1, bg: '#e74c3c', text: '反盾' },
             { duration: 10, stage: 2, bg: '#27ae60', text: '魔消提醒' },
@@ -151,7 +154,7 @@
 
         function runStage() {
             if (currentStageIdx >= stages.length) {
-                clearInterval(pikTimer);
+                cancelAnimationFrame(pikAnimationFrame);
                 document.getElementById('pik-s1-text').innerText = '0.0s';
                 document.getElementById('pik-status').style.background = '#444';
                 document.getElementById('pik-status').innerText = '點擊啟動';
@@ -161,14 +164,14 @@
             const currentConfig = stages[currentStageIdx];
             const targetTime = Date.now() + (currentConfig.duration * 1000);
 
-            pikTimer = setInterval(() => {
+            function updatePik() {
                 const remainingMs = targetTime - Date.now();
                 const time = remainingMs / 1000;
 
                 if (time <= 0) {
-                    clearInterval(pikTimer);
+                    cancelAnimationFrame(pikAnimationFrame);
                     currentStageIdx++;
-                    runStage(); // 自動進入下一個階段
+                    runStage(); 
                     return;
                 }
 
@@ -176,7 +179,11 @@
                 const bar = document.getElementById('pik-status');
                 bar.style.background = (time <= 5) ? '#f1c40f' : currentConfig.bg;
                 bar.innerText = `${currentConfig.text}：${time.toFixed(1)}s`;
-            }, 100);
+
+                pikAnimationFrame = requestAnimationFrame(updatePik);
+            }
+
+            pikAnimationFrame = requestAnimationFrame(updatePik);
         }
 
         runStage();
