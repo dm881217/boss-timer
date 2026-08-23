@@ -120,36 +120,40 @@
         else { bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; }
     }
 
-    // 獅王召喚小怪機制 (90s, 7次達機制)
+    // 獅王召喚小怪（手動點擊觸發，每次 +1 次數，支援 90 秒倒數）
     let lionMobCount = 0;
-    let lionMobTimer = null;
     function startLionMob() {
-        if (lionMobTimer) clearInterval(lionMobTimer);
         const id = 'lion-s2';
-        document.getElementById(id).classList.add('active');
+        if (timers[id]) clearInterval(timers[id]);
+        alertTriggered[id] = false;
+
+        if (lionMobCount < 7) {
+            lionMobCount++;
+        }
+
+        const el = document.getElementById(id);
+        el.classList.add('active');
         let time = 90;
-        
-        lionMobTimer = setInterval(() => {
+
+        timers[id] = setInterval(() => {
             time -= 0.1;
-            if (time <= 5 && time > 4.9) playAlert();
+            if (time <= 5 && time > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
             if (time <= 0) {
-                lionMobCount++;
-                if (lionMobCount >= 7) {
-                    document.getElementById('lion-status').style.background = '#e74c3c';
-                    document.getElementById('lion-status').innerText = `⚠️ 已達 7 次！注意鎖潛機制！`;
-                    document.getElementById(id).classList.remove('active');
-                    clearInterval(lionMobTimer);
-                    return;
-                }
-                time = 90; // 重新循環 90 秒
-                document.getElementById('lion-status').style.background = '#f1c40f';
-                document.getElementById('lion-status').innerText = `小怪次數：${lionMobCount} / 7`;
+                time = 0;
+                el.classList.remove('active');
+                clearInterval(timers[id]);
             }
             document.getElementById(id + '-text').innerText = time.toFixed(1) + 's';
-            if(lionMobCount < 7) {
-                document.getElementById('lion-status').innerText = `小怪次數：${lionMobCount} / 7 (剩 ${time.toFixed(1)}s)`;
-            }
         }, 100);
+
+        const bar = document.getElementById('lion-status');
+        if (lionMobCount >= 7) {
+            bar.style.background = '#e74c3c';
+            bar.innerText = `⚠️ 已達 7 次！注意鎖潛機制！`;
+        } else {
+            bar.style.background = '#27ae60';
+            bar.innerText = `小怪次數：${lionMobCount} / 7`;
+        }
     }
 
     let pikStage = 0, pikTimer = null;
