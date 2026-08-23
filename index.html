@@ -10,14 +10,9 @@
         .boss-card { background: var(--card); border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .card-title { color: var(--accent); font-size: 1.2rem; font-weight: bold; margin-bottom: 12px; border-left: 4px solid var(--accent); padding-left: 10px; }
         
-        /* 基礎排版 */
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-        
-        /* P1 排版 (3個技能：第一排2個，第二排1個置中或靠左) */
         .p1-grid { grid-template-columns: repeat(2, 1fr); }
-        #p1-s3 { grid-column: span 2; } /* P1 傳送佔滿整行 */
-
-        /* P2 排版 (前2個佔滿，後3個排成一列) */
+        #p1-s3 { grid-column: span 2; }
         .p2-grid { grid-template-columns: repeat(3, 1fr); }
         #p2-s1, #p2-s2 { grid-column: span 1.5; }
 
@@ -70,19 +65,32 @@
     <div class="status-bar" id="pik-status" style="background:#444;">點擊啟動</div>
 </div>
 
+<!-- 獅王 -->
+<div class="boss-card">
+    <div class="card-title">獅王</div>
+    <div class="grid">
+        <div class="skill-btn" id="lion-s1" onclick="startTimer('lion-s1', 90, 'lion')"><div class="skill-name">傳送</div><div class="skill-time" id="lion-s1-text">90s</div></div>
+        <div class="skill-btn" id="lion-s2" onclick="startLionMob()"><div class="skill-name">召喚小怪</div><div class="skill-time" id="lion-s2-text">90s</div></div>
+        <div class="skill-btn" id="lion-s3" onclick="startTimer('lion-s3', 90, 'lion')"><div class="skill-name">鎖潛</div><div class="skill-time" id="lion-s3-text">90s</div></div>
+    </div>
+    <div class="status-bar" id="lion-status" style="background:#444;">小怪次數：0 / 7</div>
+</div>
+
 <script>
     function playAlert() { const utterance = new SpeechSynthesisUtterance("請注意"); utterance.lang = 'zh-TW'; window.speechSynthesis.speak(utterance); }
     const alertTriggered = {}, timers = {};
     const skillData = {
         'p1-s1': { total: 80, current: 0, active: false, phase: 'p1' }, 
         'p1-s2': { total: 60, current: 0, active: false, phase: 'p1' },
-        'p1-s3': { total: 90, current: 0, active: false, phase: 'p1' }, // P1 傳送
+        'p1-s3': { total: 90, current: 0, active: false, phase: 'p1' },
         'p2-s1': { total: 80, current: 0, active: false, phase: 'p2' }, 
         'p2-s2': { total: 60, current: 0, active: false, phase: 'p2' },
         'p2-s3': { total: 90, current: 0, active: false, phase: 'p2' }, 
         'p2-s4': { total: 60, current: 0, active: false, phase: 'p2' },
         'p2-s5': { total: 90, current: 0, active: false, phase: 'p2' }, 
-        'miha-s1': { total: 70, current: 0, active: false, phase: 'miha' }
+        'miha-s1': { total: 70, current: 0, active: false, phase: 'miha' },
+        'lion-s1': { total: 90, current: 0, active: false, phase: 'lion' },
+        'lion-s3': { total: 90, current: 0, active: false, phase: 'lion' }
     };
 
     function startTimer(id, duration, phase) {
@@ -94,9 +102,9 @@
             if (data.current <= 5 && data.current > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
             if (data.current <= 0) { data.current = 0; data.active = false; document.getElementById(id).classList.remove('active'); clearInterval(timers[id]); }
             document.getElementById(id + '-text').innerText = data.current.toFixed(1) + 's';
-            updateGlobalSafety(phase);
+            if(phase !== 'lion') updateGlobalSafety(phase);
         }, 100);
-        updateGlobalSafety(phase);
+        if(phase !== 'lion') updateGlobalSafety(phase);
     }
 
     function updateGlobalSafety(phase) {
@@ -110,6 +118,38 @@
         const bar = document.getElementById(phase + '-status');
         if (!allActive) { bar.style.background = '#444'; bar.innerText = '未監控'; }
         else { bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; }
+    }
+
+    // 獅王召喚小怪機制 (90s, 7次達機制)
+    let lionMobCount = 0;
+    let lionMobTimer = null;
+    function startLionMob() {
+        if (lionMobTimer) clearInterval(lionMobTimer);
+        const id = 'lion-s2';
+        document.getElementById(id).classList.add('active');
+        let time = 90;
+        
+        lionMobTimer = setInterval(() => {
+            time -= 0.1;
+            if (time <= 5 && time > 4.9) playAlert();
+            if (time <= 0) {
+                lionMobCount++;
+                if (lionMobCount >= 7) {
+                    document.getElementById('lion-status').style.background = '#e74c3c';
+                    document.getElementById('lion-status').innerText = `⚠️ 已達 7 次！注意鎖潛機制！`;
+                    document.getElementById(id).classList.remove('active');
+                    clearInterval(lionMobTimer);
+                    return;
+                }
+                time = 90; // 重新循環 90 秒
+                document.getElementById('lion-status').style.background = '#f1c40f';
+                document.getElementById('lion-status').innerText = `小怪次數：${lionMobCount} / 7`;
+            }
+            document.getElementById(id + '-text').innerText = time.toFixed(1) + 's';
+            if(lionMobCount < 7) {
+                document.getElementById('lion-status').innerText = `小怪次數：${lionMobCount} / 7 (剩 ${time.toFixed(1)}s)`;
+            }
+        }, 100);
     }
 
     let pikStage = 0, pikTimer = null;
