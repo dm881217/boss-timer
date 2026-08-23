@@ -13,8 +13,9 @@
         /* 基礎排版 */
         .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
         
-        /* P1 排版 (2個) */
+        /* P1 排版 (3個技能：第一排2個，第二排1個置中或靠左) */
         .p1-grid { grid-template-columns: repeat(2, 1fr); }
+        #p1-s3 { grid-column: span 2; } /* P1 傳送佔滿整行 */
 
         /* P2 排版 (前2個佔滿，後3個排成一列) */
         .p2-grid { grid-template-columns: repeat(3, 1fr); }
@@ -31,15 +32,18 @@
 
 <h2 style="text-align: center; color: var(--accent);">炭炭打王小工具</h2>
 
+<!-- 女皇 P1 -->
 <div class="boss-card">
     <div class="card-title">女皇 P1 (50%以上)</div>
     <div class="grid p1-grid">
         <div class="skill-btn" id="p1-s1" onclick="startTimer('p1-s1', 80, 'p1')"><div class="skill-name">反盾</div><div class="skill-time" id="p1-s1-text">80s</div></div>
         <div class="skill-btn" id="p1-s2" onclick="startTimer('p1-s2', 60, 'p1')"><div class="skill-name">變豬</div><div class="skill-time" id="p1-s2-text">60s</div></div>
+        <div class="skill-btn" id="p1-s3" onclick="startTimer('p1-s3', 90, 'p1')"><div class="skill-name">傳送</div><div class="skill-time" id="p1-s3-text">90s</div></div>
     </div>
     <div class="status-bar" id="p1-status" style="background:#444;">未監控</div>
 </div>
 
+<!-- 女皇 P2 -->
 <div class="boss-card">
     <div class="card-title">女皇 P2 (50%以下)</div>
     <div class="grid p2-grid">
@@ -52,12 +56,14 @@
     <div class="status-bar" id="p2-status" style="background:#444;">未監控</div>
 </div>
 
+<!-- 米哈 -->
 <div class="boss-card">
     <div class="card-title">米哈</div>
     <div class="grid"><div class="skill-btn" id="miha-s1" onclick="startTimer('miha-s1', 70, 'miha')"><div class="skill-name">反盾</div><div class="skill-time" id="miha-s1-text">70s</div></div></div>
     <div class="status-bar" id="miha-status" style="background:#444;">等待啟動</div>
 </div>
 
+<!-- 皮卡丘 -->
 <div class="boss-card">
     <div class="card-title">皮卡丘</div>
     <div class="grid"><div class="skill-btn" id="pik-s1" onclick="startManualPik()"><div class="skill-name">反盾</div><div class="skill-time" id="pik-s1-text">25s</div></div></div>
@@ -65,128 +71,59 @@
 </div>
 
 <script>
-    function playAlert() { 
-        const utterance = new SpeechSynthesisUtterance("請注意"); 
-        utterance.lang = 'zh-TW'; 
-        window.speechSynthesis.speak(utterance); 
-    }
-
-    const alertTriggered = {}, animationFrames = {};
+    function playAlert() { const utterance = new SpeechSynthesisUtterance("請注意"); utterance.lang = 'zh-TW'; window.speechSynthesis.speak(utterance); }
+    const alertTriggered = {}, timers = {};
     const skillData = {
-        'p1-s1': { duration: 80, active: false, phase: 'p1' }, 'p1-s2': { duration: 60, active: false, phase: 'p1' },
-        'p2-s1': { duration: 80, active: false, phase: 'p2' }, 'p2-s2': { duration: 60, active: false, phase: 'p2' },
-        'p2-s3': { duration: 90, active: false, phase: 'p2' }, 'p2-s4': { duration: 60, active: false, phase: 'p2' },
-        'p2-s5': { duration: 90, active: false, phase: 'p2', optional: true }, 'miha-s1': { duration: 70, active: false, phase: 'miha' }
+        'p1-s1': { total: 80, current: 0, active: false, phase: 'p1' }, 
+        'p1-s2': { total: 60, current: 0, active: false, phase: 'p1' },
+        'p1-s3': { total: 90, current: 0, active: false, phase: 'p1' }, // P1 傳送
+        'p2-s1': { total: 80, current: 0, active: false, phase: 'p2' }, 
+        'p2-s2': { total: 60, current: 0, active: false, phase: 'p2' },
+        'p2-s3': { total: 90, current: 0, active: false, phase: 'p2' }, 
+        'p2-s4': { total: 60, current: 0, active: false, phase: 'p2' },
+        'p2-s5': { total: 90, current: 0, active: false, phase: 'p2' }, 
+        'miha-s1': { total: 70, current: 0, active: false, phase: 'miha' }
     };
 
     function startTimer(id, duration, phase) {
-        if (animationFrames[id]) cancelAnimationFrame(animationFrames[id]);
-        alertTriggered[id] = false; 
-        const data = skillData[id];
-        data.active = true; 
-        document.getElementById(id).classList.add('active');
-
-        const targetTime = Date.now() + (duration * 1000);
-
-        function update() {
-            const remainingMs = targetTime - Date.now();
-            const currentSec = remainingMs / 1000;
-
-            if (currentSec <= 5 && currentSec > 0 && !alertTriggered[id]) { 
-                playAlert(); 
-                alertTriggered[id] = true; 
-            }
-
-            if (currentSec <= 0) {
-                data.active = false; 
-                document.getElementById(id).classList.remove('active'); 
-                document.getElementById(id + '-text').innerText = '0.0s';
-                updateGlobalSafety(phase);
-                cancelAnimationFrame(animationFrames[id]);
-                return;
-            }
-
-            document.getElementById(id + '-text').innerText = currentSec.toFixed(1) + 's';
+        if (timers[id]) clearInterval(timers[id]);
+        alertTriggered[id] = false; const data = skillData[id];
+        data.active = true; data.current = duration; document.getElementById(id).classList.add('active');
+        timers[id] = setInterval(() => {
+            data.current -= 0.1;
+            if (data.current <= 5 && data.current > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
+            if (data.current <= 0) { data.current = 0; data.active = false; document.getElementById(id).classList.remove('active'); clearInterval(timers[id]); }
+            document.getElementById(id + '-text').innerText = data.current.toFixed(1) + 's';
             updateGlobalSafety(phase);
-            
-            // 持續用最高效率更新畫面
-            animationFrames[id] = requestAnimationFrame(update);
-        }
-
-        animationFrames[id] = requestAnimationFrame(update);
+        }, 100);
+        updateGlobalSafety(phase);
     }
 
     function updateGlobalSafety(phase) {
-        let allActive = true, minTime = Infinity;
+        let allActive = true, minTime = Infinity, targetTotal = 1;
         for (let id in skillData) {
             if (skillData[id].phase === phase) {
-                if (skillData[id].optional && !skillData[id].active) continue;
                 if (!skillData[id].active) allActive = false;
-                
-                const textElem = document.getElementById(id + '-text');
-                if (skillData[id].active && textElem) {
-                    const sec = parseFloat(textElem.innerText);
-                    if (sec < minTime) { minTime = sec; }
-                }
+                if (skillData[id].active && skillData[id].current < minTime) { minTime = skillData[id].current; targetTotal = skillData[id].total; }
             }
         }
         const bar = document.getElementById(phase + '-status');
-        if (!allActive) { 
-            bar.style.background = '#444'; 
-            bar.innerText = '未監控'; 
-        } else { 
-            bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; 
-            bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; 
-        }
+        if (!allActive) { bar.style.background = '#444'; bar.innerText = '未監控'; }
+        else { bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; }
     }
 
-    let pikAnimationFrame = null;
+    let pikStage = 0, pikTimer = null;
     function startManualPik() {
-        if (pikAnimationFrame) cancelAnimationFrame(pikAnimationFrame);
-
-        const stages = [
-            { duration: 25, stage: 1, bg: '#e74c3c', text: '反盾' },
-            { duration: 10, stage: 2, bg: '#27ae60', text: '魔消提醒' },
-            { duration: 50, stage: 3, bg: '#3498db', text: '安全期' }
-        ];
-
-        let currentStageIdx = 0;
-
-        function runStage() {
-            if (currentStageIdx >= stages.length) {
-                cancelAnimationFrame(pikAnimationFrame);
-                document.getElementById('pik-s1-text').innerText = '0.0s';
-                document.getElementById('pik-status').style.background = '#444';
-                document.getElementById('pik-status').innerText = '點擊啟動';
-                return;
-            }
-
-            const currentConfig = stages[currentStageIdx];
-            const targetTime = Date.now() + (currentConfig.duration * 1000);
-
-            function updatePik() {
-                const remainingMs = targetTime - Date.now();
-                const time = remainingMs / 1000;
-
-                if (time <= 0) {
-                    cancelAnimationFrame(pikAnimationFrame);
-                    currentStageIdx++;
-                    runStage(); 
-                    return;
-                }
-
-                document.getElementById('pik-s1-text').innerText = time.toFixed(1) + 's';
-                const bar = document.getElementById('pik-status');
-                bar.style.background = (time <= 5) ? '#f1c40f' : currentConfig.bg;
-                bar.innerText = `${currentConfig.text}：${time.toFixed(1)}s`;
-
-                pikAnimationFrame = requestAnimationFrame(updatePik);
-            }
-
-            pikAnimationFrame = requestAnimationFrame(updatePik);
-        }
-
-        runStage();
+        if (pikTimer) clearInterval(pikTimer);
+        pikStage = 1; let time = 25;
+        pikTimer = setInterval(() => {
+            time -= 0.1;
+            if (time <= 0) { if (pikStage === 1) { pikStage = 2; time = 10; } else if (pikStage === 2) { pikStage = 3; time = 50; } else { clearInterval(pikTimer); pikStage = 0; return; } }
+            document.getElementById('pik-s1-text').innerText = time.toFixed(1) + 's';
+            const bar = document.getElementById('pik-status');
+            bar.style.background = (time <= 5) ? '#f1c40f' : (pikStage === 1 ? '#e74c3c' : (pikStage === 2 ? '#27ae60' : '#3498db'));
+            bar.innerText = (pikStage === 1) ? `反盾：${time.toFixed(1)}s` : (pikStage === 2 ? `魔消提醒：${time.toFixed(1)}s` : `安全期：${time.toFixed(1)}s`);
+        }, 100);
     }
 </script>
 </body>
