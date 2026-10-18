@@ -77,50 +77,87 @@
 </div>
 
 <script>
-    function playAlert() { const utterance = new SpeechSynthesisUtterance("請注意"); utterance.lang = 'zh-TW'; window.speechSynthesis.speak(utterance); }
+    function playAlert() { 
+        const utterance = new SpeechSynthesisUtterance("請注意"); 
+        utterance.lang = 'zh-TW'; 
+        window.speechSynthesis.speak(utterance); 
+    }
+
     const alertTriggered = {}, timers = {};
     const skillData = {
-        'p1-s1': { total: 80, current: 0, active: false, phase: 'p1' }, 
-        'p1-s2': { total: 60, current: 0, active: false, phase: 'p1' },
-        'p1-s3': { total: 90, current: 0, active: false, phase: 'p1' },
-        'p2-s1': { total: 80, current: 0, active: false, phase: 'p2' }, 
-        'p2-s2': { total: 60, current: 0, active: false, phase: 'p2' },
-        'p2-s3': { total: 90, current: 0, active: false, phase: 'p2' }, 
-        'p2-s4': { total: 60, current: 0, active: false, phase: 'p2' },
-        'p2-s5': { total: 90, current: 0, active: false, phase: 'p2' }, 
-        'miha-s1': { total: 70, current: 0, active: false, phase: 'miha' },
-        'lion-s1': { total: 90, current: 0, active: false, phase: 'lion' },
-        'lion-s3': { total: 90, current: 0, active: false, phase: 'lion' }
+        'p1-s1': { total: 80, active: false, phase: 'p1' }, 
+        'p1-s2': { total: 60, active: false, phase: 'p1' },
+        'p1-s3': { total: 90, active: false, phase: 'p1' },
+        'p2-s1': { total: 80, active: false, phase: 'p2' }, 
+        'p2-s2': { total: 60, active: false, phase: 'p2' },
+        'p2-s3': { total: 90, active: false, phase: 'p2' }, 
+        'p2-s4': { total: 60, active: false, phase: 'p2' },
+        'p2-s5': { total: 90, active: false, phase: 'p2' }, 
+        'miha-s1': { total: 70, active: false, phase: 'miha' },
+        'lion-s1': { total: 90, active: false, phase: 'lion' },
+        'lion-s2': { total: 90, active: false, phase: 'lion' }, // 獅王小怪計時
+        'lion-s3': { total: 90, active: false, phase: 'lion' }
     };
 
     function startTimer(id, duration, phase) {
         if (timers[id]) clearInterval(timers[id]);
-        alertTriggered[id] = false; const data = skillData[id];
-        data.active = true; data.current = duration; document.getElementById(id).classList.add('active');
+        alertTriggered[id] = false; 
+        const data = skillData[id];
+        data.active = true; 
+        document.getElementById(id).classList.add('active');
+
+        // 記錄絕對結束時間，完全不怕 setInterval 誤差
+        const targetTime = Date.now() + (duration * 1000);
+
         timers[id] = setInterval(() => {
-            data.current -= 0.1;
-            if (data.current <= 5 && data.current > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
-            if (data.current <= 0) { data.current = 0; data.active = false; document.getElementById(id).classList.remove('active'); clearInterval(timers[id]); }
-            document.getElementById(id + '-text').innerText = data.current.toFixed(1) + 's';
+            const remainingMs = targetTime - Date.now();
+            const currentSec = remainingMs / 1000;
+
+            if (currentSec <= 5 && currentSec > 0 && !alertTriggered[id]) { 
+                playAlert(); 
+                alertTriggered[id] = true; 
+            }
+
+            if (currentSec <= 0) {
+                data.active = false; 
+                document.getElementById(id).classList.remove('active'); 
+                document.getElementById(id + '-text').innerText = '0.0s';
+                clearInterval(timers[id]);
+                if(phase !== 'lion') updateGlobalSafety(phase);
+                return;
+            }
+
+            document.getElementById(id + '-text').innerText = currentSec.toFixed(1) + 's';
             if(phase !== 'lion') updateGlobalSafety(phase);
         }, 100);
+
         if(phase !== 'lion') updateGlobalSafety(phase);
     }
 
     function updateGlobalSafety(phase) {
-        let allActive = true, minTime = Infinity, targetTotal = 1;
+        let allActive = true, minTime = Infinity;
         for (let id in skillData) {
             if (skillData[id].phase === phase) {
                 if (!skillData[id].active) allActive = false;
-                if (skillData[id].active && skillData[id].current < minTime) { minTime = skillData[id].current; targetTotal = skillData[id].total; }
+                
+                const textElem = document.getElementById(id + '-text');
+                if (skillData[id].active && textElem) {
+                    const sec = parseFloat(textElem.innerText);
+                    if (!isNaN(sec) && sec < minTime) { minTime = sec; }
+                }
             }
         }
         const bar = document.getElementById(phase + '-status');
-        if (!allActive) { bar.style.background = '#444'; bar.innerText = '未監控'; }
-        else { bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; }
+        if (!allActive) { 
+            bar.style.background = '#444'; 
+            bar.innerText = '未監控'; 
+        } else { 
+            bar.style.background = (minTime <= 5) ? '#f1c40f' : '#27ae60'; 
+            bar.innerText = `安全：剩 ${minTime.toFixed(1)}s`; 
+        }
     }
 
-    // 獅王召喚小怪（手動點擊觸發，每次 +1 次數，支援 90 秒倒數）
+    // 獅王召喚小怪（使用絕對時間差，不累積誤差）
     let lionMobCount = 0;
     function startLionMob() {
         const id = 'lion-s2';
@@ -131,21 +168,37 @@
             lionMobCount++;
         }
 
+        const data = skillData[id];
+        data.active = true;
         const el = document.getElementById(id);
         el.classList.add('active');
-        let time = 90;
+
+        const targetTime = Date.now() + (90 * 1000);
 
         timers[id] = setInterval(() => {
-            time -= 0.1;
-            if (time <= 5 && time > 0 && !alertTriggered[id]) { playAlert(); alertTriggered[id] = true; }
-            if (time <= 0) {
-                time = 0;
-                el.classList.remove('active');
-                clearInterval(timers[id]);
+            const remainingMs = targetTime - Date.now();
+            const time = remainingMs / 1000;
+
+            if (time <= 5 && time > 0 && !alertTriggered[id]) { 
+                playAlert(); 
+                alertTriggered[id] = true; 
             }
+
+            if (time <= 0) {
+                data.active = false;
+                el.classList.remove('active');
+                document.getElementById(id + '-text').innerText = '0.0s';
+                clearInterval(timers[id]);
+                return;
+            }
+
             document.getElementById(id + '-text').innerText = time.toFixed(1) + 's';
         }, 100);
 
+        updateLionStatus();
+    }
+
+    function updateLionStatus() {
         const bar = document.getElementById('lion-status');
         if (lionMobCount >= 7) {
             bar.style.background = '#e74c3c';
@@ -156,18 +209,50 @@
         }
     }
 
-    let pikStage = 0, pikTimer = null;
+    // 皮卡丘多階段計時（同步改用絕對時間差）
+    let pikTimer = null;
     function startManualPik() {
         if (pikTimer) clearInterval(pikTimer);
-        pikStage = 1; let time = 25;
-        pikTimer = setInterval(() => {
-            time -= 0.1;
-            if (time <= 0) { if (pikStage === 1) { pikStage = 2; time = 10; } else if (pikStage === 2) { pikStage = 3; time = 50; } else { clearInterval(pikTimer); pikStage = 0; return; } }
-            document.getElementById('pik-s1-text').innerText = time.toFixed(1) + 's';
-            const bar = document.getElementById('pik-status');
-            bar.style.background = (time <= 5) ? '#f1c40f' : (pikStage === 1 ? '#e74c3c' : (pikStage === 2 ? '#27ae60' : '#3498db'));
-            bar.innerText = (pikStage === 1) ? `反盾：${time.toFixed(1)}s` : (pikStage === 2 ? `魔消提醒：${time.toFixed(1)}s` : `安全期：${time.toFixed(1)}s`);
-        }, 100);
+
+        const stages = [
+            { duration: 25, stage: 1, bg: '#e74c3c', text: '反盾' },
+            { duration: 10, stage: 2, bg: '#27ae60', text: '魔消提醒' },
+            { duration: 50, stage: 3, bg: '#3498db', text: '安全期' }
+        ];
+
+        let currentStageIdx = 0;
+
+        function runStage() {
+            if (currentStageIdx >= stages.length) {
+                clearInterval(pikTimer);
+                document.getElementById('pik-s1-text').innerText = '0.0s';
+                document.getElementById('pik-status').style.background = '#444';
+                document.getElementById('pik-status').innerText = '點擊啟動';
+                return;
+            }
+
+            const currentConfig = stages[currentStageIdx];
+            const targetTime = Date.now() + (currentConfig.duration * 1000);
+
+            pikTimer = setInterval(() => {
+                const remainingMs = targetTime - Date.now();
+                const time = remainingMs / 1000;
+
+                if (time <= 0) {
+                    clearInterval(pikTimer);
+                    currentStageIdx++;
+                    runStage(); 
+                    return;
+                }
+
+                document.getElementById('pik-s1-text').innerText = time.toFixed(1) + 's';
+                const bar = document.getElementById('pik-status');
+                bar.style.background = (time <= 5) ? '#f1c40f' : currentConfig.bg;
+                bar.innerText = `${currentConfig.text}：${time.toFixed(1)}s`;
+            }, 100);
+        }
+
+        runStage();
     }
 </script>
 </body>
